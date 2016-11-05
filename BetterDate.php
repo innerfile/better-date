@@ -1,8 +1,5 @@
 <?php
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 class BetterDate {
   
   /**
@@ -12,13 +9,13 @@ class BetterDate {
   private $original = '';
   
   /**
-   * @var String $type
+   * @var String $formatName
    *  The name of the format used to convert the date passed in to the 
    *  constructor ($this->original) to a DateTime object ($this->dateTime).
    *
    * $type is the array key in config/types.php.
    */
-  private $type = '';
+  private $formatName = '';
   
   /**
    * @var String $format
@@ -71,7 +68,7 @@ class BetterDate {
       throw new Exception('Failure to create new BetterDate object. Please check config/types.php to ensure you have the format set up to match: ' . $date);
   }
 
-  public function result($format = FALSE) {
+  public function format($format = FALSE) {
     $format = $format ? $format : $this->format;
     return $this->dateTime->format($format);
   }
@@ -79,7 +76,7 @@ class BetterDate {
   public function original($format = FALSE) {
     if ($format) {
       $formattedOriginal = new self($this->original, $this->timeZone);
-      return $formattedOriginal->result($format);
+      return $formattedOriginal->format($format);
     }
     return $this->original;
   }
@@ -88,12 +85,24 @@ class BetterDate {
     return $this->dateTime;
   }
 
-  public function isBefore($milestone) {
-    return $this->dateTime() < self::convert($milestone)->dateTime();
+  public function isBefore($date) {
+    return $this->dateTime() < self::convert($date)->dateTime();
+  }
+  
+  public function isOnOrBefore($date) {
+    return $this->dateTime() <= self::convert($date)->dateTime();
   }
 
-  public function isAfter($milestone) {
-    return $this->dateTime() > self::convert($milestone)->dateTime();
+  public function isAfter($date) {
+    return $this->dateTime() > self::convert($date)->dateTime();
+  }
+
+  public function isOnOrAfter($date) {
+    return $this->dateTime() >= self::convert($date)->dateTime();
+  }
+  
+  public function isSameDateAs($date) {
+    return $this->format('Y-m-d') === self::convert($date)->format('Y-m-d');
   }
 
   public function addDays($days) {
@@ -112,48 +121,38 @@ class BetterDate {
       : date('Y') - $this->year();
   }
   
-  public function year($result = '4 digits') {
-    switch ($result) {
-      case '4 digits':
-        return $this->result('Y');
-      case '2 digits':
-        return $this->result('y');
-    }
+  public function day($formatName = 'leading zero') {
+    return $this->formatOrError('day', $formatName, [
+      'leading zero' => 'd',
+      'no leading zero' => 'j',
+      'name' => 'l',
+    ]);
+  }
+
+  public function month($formatName = 'leading zero') {
+    return $this->formatOrError('month', $formatName, [
+      'leading zero' => 'm',
+      'no leading zero' => 'n',
+      'abbreviation' => 'M',
+      'name' => 'F',
+    ]);
+  }
+
+  public function year($formatName = '4 digits') {
+    return $this->formatOrError('year', $formatName, [
+      '4 digits' => 'Y',
+      '2 digits' => 'y',
+    ]);
   }
   
-  public function day($result = 'leading zero') {
-    switch ($result) {
-      case 'leading zero':
-        return $this->result('d');
-      case 'no leading zero':
-        return $this->result('j');
-      case 'name':
-        return $this->result('l');
-      default:
-        return 'ERROR, invalid day result format: ' . $result;
-    }
-  }
-  
-  public function month($result = 'leading zero') {
-    switch ($result) {
-      case 'leading zero':
-        return $this->result('m');
-      case 'no leading zero':
-        return $this->result('n');
-      case 'abbreviation':
-        return $this->result('M');
-      case 'name':
-        return $this->result('F');
-      default:
-        return 'ERROR, invalid month result format: ' . $result;
-    }
+  private function formatOrError($name, $formatName, $formats) {
+    if(!isset($formats[$formatName]))
+      return 'ERROR, invalid ' . $type . ' format: ' . $formatName;
+    return $this->format($formats[$formatName]);
   }
 
   private function setDateTime($format) {
-    if ($format)
-      return $this->setDateTimeUsingFormat($format);
-    else
-      return $this->setDateTimeUsingConfig();
+    return $format ? $this->setDateTimeUsingFormat($format) : $this->setDateTimeUsingConfig();
   }
 
   private function setDateTimeUsingFormat($format) {
@@ -161,22 +160,22 @@ class BetterDate {
   }
 
   private function setDateTimeUsingConfig() {
-    foreach (require('config/types.php') as $type => $format)
-      if ($this->createDateTime($format, $type))
+    foreach (require('config/types.php') as $formatName => $format)
+      if ($this->createDateTime($format, $formatName))
         return TRUE;
   }
 
-  private function createDateTime($format, $type) {
+  private function createDateTime($format, $formatName) {
     if (DateTime::createFromFormat($format, $this->original) !== FALSE) {
       $this->dateTime = DateTime::createFromFormat($format, $this->original, new DateTimeZone($this->timeZone));
-      $this->type = $type;
+      $this->formatName = $formatName;
       $this->format = $format;
       return TRUE;
     }
   }
   
-  private static function convert($milestone) {
-    return is_a($milestone, 'BetterDate') ? $milestone : new self($milestone);
+  private static function convert($date) {
+    return is_a($date, 'BetterDate') ? $date : new self($date);
   }
 
 }
